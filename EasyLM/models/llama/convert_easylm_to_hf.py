@@ -38,7 +38,6 @@ from EasyLM.jax_utils import float_tensor_to_dtype
 
 FLAGS, FLAGS_DEF = mlxu.define_flags_with_default(
     load_checkpoint="",
-    tokenizer_path="",
     model_size="13b",
     output_dir="",
 )
@@ -228,87 +227,12 @@ def write_model(loaded, model_path, model_size):
     shutil.rmtree(tmp_model_path)
 
 
-def write_tokenizer(tokenizer_path, input_tokenizer_path):
-    print(f"Fetching the tokenizer from {input_tokenizer_path}.")
-    os.makedirs(tokenizer_path, exist_ok=True)
-    write_json(
-        {
-            "bos_token": {
-                "content": "<s>",
-                "lstrip": False,
-                "normalized": True,
-                "rstrip": False,
-                "single_word": False,
-            },
-            "eos_token": {
-                "content": "</s>",
-                "lstrip": False,
-                "normalized": True,
-                "rstrip": False,
-                "single_word": False,
-            },
-            "unk_token": {
-                "content": "<unk>",
-                "lstrip": False,
-                "normalized": True,
-                "rstrip": False,
-                "single_word": False,
-            },
-        },
-        os.path.join(tokenizer_path, "special_tokens_map.json"),
-    )
-    write_json(
-        {
-            "add_bos_token": True,
-            "add_eos_token": False,
-            "model_max_length": 2048,
-            "pad_token": None,
-            "sp_model_kwargs": {},
-            "tokenizer_class": "LlamaTokenizer",
-            "clean_up_tokenization_spaces": False,
-            "bos_token": {
-                "__type": "AddedToken",
-                "content": "<s>",
-                "lstrip": False,
-                "normalized": True,
-                "rstrip": False,
-                "single_word": False,
-            },
-            "eos_token": {
-                "__type": "AddedToken",
-                "content": "</s>",
-                "lstrip": False,
-                "normalized": True,
-                "rstrip": False,
-                "single_word": False,
-            },
-            "unk_token": {
-                "__type": "AddedToken",
-                "content": "<unk>",
-                "lstrip": False,
-                "normalized": True,
-                "rstrip": False,
-                "single_word": False,
-            },
-        },
-        os.path.join(tokenizer_path, "tokenizer_config.json"),
-    )
-    shutil.copyfile(
-        input_tokenizer_path, os.path.join(tokenizer_path, "tokenizer.model")
-    )
-
-
 def main(argv):
     assert (
         FLAGS.load_checkpoint != ""
         and FLAGS.output_dir != ""
-        and FLAGS.tokenizer_path != ""
     )
     assert FLAGS.model_size in LLAMA_STANDARD_CONFIGS
-    write_tokenizer(
-        tokenizer_path=FLAGS.output_dir,
-        input_tokenizer_path=FLAGS.tokenizer_path,
-    )
     write_model(
         load_and_convert_checkpoint(FLAGS.load_checkpoint),
         model_path=FLAGS.output_dir,
