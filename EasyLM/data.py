@@ -148,6 +148,7 @@ class HuggingfaceDataset(object):
         config.path = "c4"
         config.name = "en"
         config.split = "train"
+        config.data_files = ""
         config.streaming = False
         config.seq_length = 1024
         config.batch_size = 8
@@ -162,11 +163,21 @@ class HuggingfaceDataset(object):
         self.config = self.get_default_config(config)
         name = self.config.name if self.config.name != "" else None
         split = self.config.split if self.config.split != "" else None
+        data_files = self.config.data_files.split(";")
         self._tokenizer = tokenizer
         self._text_processor = text_processor
-        self._dataset = load_dataset(
-            self.config.path, name, split=split, streaming=self.config.streaming
-        )
+        if len(data_files) != 0:
+            self._dataset = load_dataset(
+                self.config.path,
+                name,
+                data_files=data_files,
+                split=split,
+                streaming=self.config.streaming,
+            )
+        else:
+            self._dataset = load_dataset(
+                self.config.path, name, split=split, streaming=self.config.streaming
+            )
 
     def __iter__(self):
         chunk_size = self.config.batch_size * self.config.seq_length

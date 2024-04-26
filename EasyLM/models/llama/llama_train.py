@@ -275,8 +275,8 @@ def main(argv):
                 tqdm.write("\n" + pprint.pformat(log_metrics) + "\n")
 
             if (
-                    FLAGS.save_milestone_freq > 0
-                    and (step + 1) % FLAGS.save_milestone_freq == 0
+                FLAGS.save_milestone_freq > 0
+                and (step + 1) % FLAGS.save_milestone_freq == 0
             ):
                 save_checkpoint(train_state, milestone=True)
             elif FLAGS.save_model_freq > 0 and (step + 1) % FLAGS.save_model_freq == 0:
