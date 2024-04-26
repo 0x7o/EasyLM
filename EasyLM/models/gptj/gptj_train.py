@@ -15,23 +15,31 @@ from EasyLM.data import DatasetFactory
 from EasyLM.checkpoint import StreamingCheckpointer
 from EasyLM.optimizers import OptimizerFactory
 from EasyLM.jax_utils import (
-    JaxRNG, JaxDistributedConfig, next_rng, match_partition_rules,
-    cross_entropy_loss_and_accuracy, global_norm, get_float_dtype_by_name,
-    set_random_seed, average_metrics, get_weight_decay_mask,
-    make_shard_and_gather_fns, tree_apply
+    JaxRNG,
+    JaxDistributedConfig,
+    next_rng,
+    match_partition_rules,
+    cross_entropy_loss_and_accuracy,
+    global_norm,
+    get_float_dtype_by_name,
+    set_random_seed,
+    average_metrics,
+    get_weight_decay_mask,
+    make_shard_and_gather_fns,
+    tree_apply,
 )
 from EasyLM.models.gptj.gptj_model import GPTJConfig, FlaxGPTJForCausalLMModule
 
 
 FLAGS, FLAGS_DEF = mlxu.define_flags_with_default(
     seed=42,
-    mesh_dim='1,-1,1',
-    dtype='fp32',
+    mesh_dim="1,-1,1",
+    dtype="fp32",
     total_steps=10000,
-    load_gptj_config='',
-    update_gptj_config='',
-    load_checkpoint='',
-    load_dataset_state='',
+    load_gptj_config="",
+    update_gptj_config="",
+    load_checkpoint="",
+    load_dataset_state="",
     log_freq=50,
     save_model_freq=0,
     save_milestone_freq=0,
@@ -61,7 +69,7 @@ def main(argv):
 
     tokenizer = GPTJConfig.get_tokenizer(FLAGS.tokenizer)
     dataset = DatasetFactory.load_dataset(FLAGS.train_dataset, tokenizer)
-    if FLAGS.load_dataset_state != '':
+    if FLAGS.load_dataset_state != "":
         dataset.load_state_dict(mlxu.load_pickle(FLAGS.load_dataset_state))
 
     if FLAGS.eval_steps > 0:
@@ -72,18 +80,20 @@ def main(argv):
 
     seq_length = dataset.seq_length
 
-    if FLAGS.load_gptj_config != '':
+    if FLAGS.load_gptj_config != "":
         gptj_config = GPTJConfig.load_config(FLAGS.load_gptj_config)
     else:
         gptj_config = GPTJConfig(**FLAGS.gptj)
 
-    if FLAGS.update_gptj_config != '':
+    if FLAGS.update_gptj_config != "":
         gptj_config.update(dict(eval(FLAGS.update_gptj_config)))
 
-    gptj_config.update(dict(
-        bos_token_id=dataset.tokenizer.bos_token_id,
-        eos_token_id=dataset.tokenizer.eos_token_id,
-    ))
+    gptj_config.update(
+        dict(
+            bos_token_id=dataset.tokenizer.bos_token_id,
+            eos_token_id=dataset.tokenizer.eos_token_id,
+        )
+    )
     if gptj_config.vocab_size < dataset.vocab_size:
         gptj_config.update(dict(vocab_size=dataset.vocab_size))
 
@@ -111,22 +121,26 @@ def main(argv):
 
     def train_step(train_state, rng, batch):
         rng_generator = JaxRNG(rng)
-        batch = with_sharding_constraint(batch, PS(('dp', 'fsdp')))
+        batch = with_sharding_constraint(batch, PS(("dp", "fsdp")))
+
         def loss_and_accuracy(params):
             logits = model.apply(
-                params, batch['input_tokens'], deterministic=False,
+                params,
+                batch["input_tokens"],
+                deterministic=False,
                 rngs=rng_generator(gptj_config.rng_keys()),
             ).logits
             return cross_entropy_loss_and_accuracy(
-                logits, batch['target_tokens'], batch['loss_masks']
+                logits, batch["target_tokens"], batch["loss_masks"]
             )
+
         grad_fn = jax.value_and_grad(loss_and_accuracy, has_aux=True)
         (loss, accuracy), grads = grad_fn(train_state.params)
         train_state = train_state.apply_gradients(grads=grads)
         metrics = dict(
             loss=loss,
             accuracy=accuracy,
-            learning_rate=optimizer_info['learning_rate_schedule'](train_state.step),
+            learning_rate=optimizer_info["learning_rate_schedule"](train_state.step),
             gradient_norm=global_norm(grads),
             param_norm=global_norm(train_state.params),
         )
@@ -134,13 +148,15 @@ def main(argv):
 
     def eval_step(train_state, rng, batch):
         rng_generator = JaxRNG(rng)
-        batch = with_sharding_constraint(batch, PS(('dp', 'fsdp')))
+        batch = with_sharding_constraint(batch, PS(("dp", "fsdp")))
         logits = model.apply(
-            train_state.params, batch['input_tokens'], deterministic=True,
+            train_state.params,
+            batch["input_tokens"],
+            deterministic=True,
             rngs=rng_generator(gptj_config.rng_keys()),
         ).logits
         loss, accuracy = cross_entropy_loss_and_accuracy(
-            logits, batch['target_tokens'], batch['loss_masks']
+            logits, batch["target_tokens"], batch["loss_masks"]
         )
         metrics = dict(
             eval_loss=loss,
@@ -157,21 +173,20 @@ def main(argv):
         train_state_partition, train_state_shapes
     )
     checkpointer = StreamingCheckpointer(
-        FLAGS.checkpointer, logger.output_dir,
+        FLAGS.checkpointer,
+        logger.output_dir,
         enable=jax.process_index() == 0,
     )
 
     sharded_init_fn = pjit(
-        init_fn,
-        in_shardings=PS(),
-        out_shardings=train_state_partition
+        init_fn, in_shardings=PS(), out_shardings=train_state_partition
     )
 
     sharded_create_trainstate_from_params = pjit(
         create_trainstate_from_params,
-        in_shardings=(train_state_partition.params, ),
+        in_shardings=(train_state_partition.params,),
         out_shardings=train_state_partition,
-        donate_argnums=(0, ),
+        donate_argnums=(0,),
     )
 
     sharded_train_step = pjit(
@@ -207,9 +222,9 @@ def main(argv):
     mesh = GPTJConfig.get_jax_mesh(FLAGS.mesh_dim)
     with mesh:
         train_state, restored_params = None, None
-        if FLAGS.load_checkpoint != '':
-            load_type, load_path = FLAGS.load_checkpoint.split('::', 1)
-            if load_type == 'huggingface':
+        if FLAGS.load_checkpoint != "":
+            load_type, load_path = FLAGS.load_checkpoint.split("::", 1)
+            if load_type == "huggingface":
                 restored_params = tree_apply(
                     shard_fns.params, gptj_config.load_pretrained(load_path)
                 )
@@ -259,7 +274,10 @@ def main(argv):
                 logger.log(log_metrics)
                 tqdm.write("\n" + pprint.pformat(log_metrics) + "\n")
 
-            if FLAGS.save_milestone_freq > 0 and (step + 1) % FLAGS.save_milestone_freq == 0:
+            if (
+                FLAGS.save_milestone_freq > 0
+                and (step + 1) % FLAGS.save_milestone_freq == 0
+            ):
                 save_checkpoint(train_state, milestone=True)
             elif FLAGS.save_model_freq > 0 and (step + 1) % FLAGS.save_model_freq == 0:
                 save_checkpoint(train_state)

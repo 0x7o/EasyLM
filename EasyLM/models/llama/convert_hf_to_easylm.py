@@ -17,19 +17,19 @@ import flax
 from EasyLM.checkpoint import StreamingCheckpointer
 
 LLAMA_STANDARD_CONFIGS = {
-    '1b': {
-        'dim': 2048,
-        'intermediate_size': 5504,
-        'n_layers': 22,
-        'n_heads': 16,
-        'norm_eps': 1e-6,
+    "1b": {
+        "dim": 2048,
+        "intermediate_size": 5504,
+        "n_layers": 22,
+        "n_heads": 16,
+        "norm_eps": 1e-6,
     },
-    '3b': {
-        'dim': 3200,
-        'intermediate_size': 8640,
-        'n_layers': 26,
-        'n_heads': 32,
-        'norm_eps': 1e-6,
+    "3b": {
+        "dim": 3200,
+        "intermediate_size": 8640,
+        "n_layers": 26,
+        "n_heads": 32,
+        "norm_eps": 1e-6,
     },
     "7b": {
         "dim": 4096,

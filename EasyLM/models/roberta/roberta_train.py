@@ -17,26 +17,36 @@ from EasyLM.data import DatasetFactory
 from EasyLM.checkpoint import StreamingCheckpointer
 from EasyLM.optimizers import OptimizerFactory
 from EasyLM.jax_utils import (
-    JaxRNG, JaxDistributedConfig, next_rng, match_partition_rules, get_float_dtype_by_name,
-    cross_entropy_loss_and_accuracy, named_tree_map, global_norm,
-    set_random_seed, average_metrics, get_weight_decay_mask,
-    make_shard_and_gather_fns, tree_apply
+    JaxRNG,
+    JaxDistributedConfig,
+    next_rng,
+    match_partition_rules,
+    get_float_dtype_by_name,
+    cross_entropy_loss_and_accuracy,
+    named_tree_map,
+    global_norm,
+    set_random_seed,
+    average_metrics,
+    get_weight_decay_mask,
+    make_shard_and_gather_fns,
+    tree_apply,
 )
 from EasyLM.models.roberta.roberta_model import (
-    RobertaConfig, FlaxRobertaForMaskedLMModule
+    RobertaConfig,
+    FlaxRobertaForMaskedLMModule,
 )
 
 
 FLAGS, FLAGS_DEF = mlxu.define_flags_with_default(
     seed=42,
-    mesh_dim='-1,1,1',
-    dtype='fp32',
+    mesh_dim="-1,1,1",
+    dtype="fp32",
     mask_token_probability=0.15,
     total_steps=10000,
-    load_roberta_config='',
-    update_roberta_config='',
-    load_checkpoint='',
-    load_dataset_state='',
+    load_roberta_config="",
+    update_roberta_config="",
+    load_checkpoint="",
+    load_dataset_state="",
     log_freq=50,
     save_model_freq=0,
     save_milestone_freq=0,
@@ -66,7 +76,7 @@ def main(argv):
 
     tokenizer = RobertaConfig.get_tokenizer(FLAGS.tokenizer)
     dataset = DatasetFactory.load_dataset(FLAGS.train_dataset, tokenizer)
-    if FLAGS.load_dataset_state != '':
+    if FLAGS.load_dataset_state != "":
         dataset.load_state_dict(mlxu.load_pickle(FLAGS.load_dataset_state))
 
     if FLAGS.eval_steps > 0:
@@ -77,20 +87,22 @@ def main(argv):
 
     seq_length = dataset.seq_length
 
-    if FLAGS.load_roberta_config != '':
+    if FLAGS.load_roberta_config != "":
         roberta_config = RobertaConfig.load_config(FLAGS.load_roberta_config)
     else:
         roberta_config = RobertaConfig(**FLAGS.roberta)
 
-    if FLAGS.update_roberta_config != '':
+    if FLAGS.update_roberta_config != "":
         roberta_config.update(dict(eval(FLAGS.update_roberta_config)))
 
-    roberta_config.update(dict(
-        bos_token_id=dataset.tokenizer.bos_token_id,
-        eos_token_id=dataset.tokenizer.eos_token_id,
-        pad_token_id=dataset.tokenizer.pad_token_id,
-        vocab_size=dataset.vocab_size,
-    ))
+    roberta_config.update(
+        dict(
+            bos_token_id=dataset.tokenizer.bos_token_id,
+            eos_token_id=dataset.tokenizer.eos_token_id,
+            pad_token_id=dataset.tokenizer.pad_token_id,
+            vocab_size=dataset.vocab_size,
+        )
+    )
 
     model = FlaxRobertaForMaskedLMModule(
         roberta_config, dtype=get_float_dtype_by_name(FLAGS.dtype)
@@ -118,21 +130,26 @@ def main(argv):
 
     def train_step(train_state, rng, batch):
         rng_generator = JaxRNG(rng)
-        tokens = with_sharding_constraint(batch['target_tokens'], PS(('dp', 'fsdp')))
+        tokens = with_sharding_constraint(batch["target_tokens"], PS(("dp", "fsdp")))
+
         def loss_and_accuracy(params):
-            altered_tokens = jax.random.uniform(
-                rng_generator(), shape=tokens.shape
-            ) < FLAGS.mask_token_probability
+            altered_tokens = (
+                jax.random.uniform(rng_generator(), shape=tokens.shape)
+                < FLAGS.mask_token_probability
+            )
             random_uniform = jax.random.uniform(rng_generator(), shape=tokens.shape)
             altered_by_mask = altered_tokens & (random_uniform < 0.8)
-            altered_by_random = altered_tokens & (random_uniform >= 0.8) & (random_uniform < 0.9)
+            altered_by_random = (
+                altered_tokens & (random_uniform >= 0.8) & (random_uniform < 0.9)
+            )
             inputs = jnp.where(altered_by_mask, dataset.tokenizer.mask_token_id, tokens)
             random_tokens = jax.random.randint(
                 rng_generator(), shape=tokens.shape, minval=0, maxval=dataset.vocab_size
             )
             inputs = jnp.where(altered_by_random, random_tokens, inputs)
             logits = model.apply(
-                params, inputs,
+                params,
+                inputs,
                 attention_mask=jnp.ones_like(inputs),
                 token_type_ids=None,
                 position_ids=None,
@@ -141,13 +158,14 @@ def main(argv):
                 rngs=rng_generator(roberta_config.rng_keys()),
             ).logits
             return cross_entropy_loss_and_accuracy(logits, tokens, valid=altered_tokens)
+
         grad_fn = jax.value_and_grad(loss_and_accuracy, has_aux=True)
         (loss, accuracy), grads = grad_fn(train_state.params)
         train_state = train_state.apply_gradients(grads=grads)
         metrics = dict(
             loss=loss,
             accuracy=accuracy,
-            learning_rate=optimizer_info['learning_rate_schedule'](train_state.step),
+            learning_rate=optimizer_info["learning_rate_schedule"](train_state.step),
             gradient_norm=global_norm(grads),
             param_norm=global_norm(train_state.params),
         )
@@ -155,20 +173,24 @@ def main(argv):
 
     def eval_step(train_state, rng, batch):
         rng_generator = JaxRNG(rng)
-        tokens = with_sharding_constraint(batch['target_tokens'], PS(('dp', 'fsdp')))
-        altered_tokens = jax.random.uniform(
-            rng_generator(), shape=tokens.shape
-        ) < FLAGS.mask_token_probability
+        tokens = with_sharding_constraint(batch["target_tokens"], PS(("dp", "fsdp")))
+        altered_tokens = (
+            jax.random.uniform(rng_generator(), shape=tokens.shape)
+            < FLAGS.mask_token_probability
+        )
         random_uniform = jax.random.uniform(rng_generator(), shape=tokens.shape)
         altered_by_mask = altered_tokens & (random_uniform < 0.8)
-        altered_by_random = altered_tokens & (random_uniform >= 0.8) & (random_uniform < 0.9)
+        altered_by_random = (
+            altered_tokens & (random_uniform >= 0.8) & (random_uniform < 0.9)
+        )
         inputs = jnp.where(altered_by_mask, dataset.tokenizer.mask_token_id, tokens)
         random_tokens = jax.random.randint(
             rng_generator(), shape=tokens.shape, minval=0, maxval=dataset.vocab_size
         )
         inputs = jnp.where(altered_by_random, random_tokens, inputs)
         logits = model.apply(
-            train_state.params, inputs,
+            train_state.params,
+            inputs,
             attention_mask=jnp.ones_like(inputs),
             token_type_ids=None,
             position_ids=None,
@@ -176,7 +198,9 @@ def main(argv):
             deterministic=False,
             rngs=rng_generator(roberta_config.rng_keys()),
         ).logits
-        loss, accuracy = cross_entropy_loss_and_accuracy(logits, tokens, valid=altered_tokens)
+        loss, accuracy = cross_entropy_loss_and_accuracy(
+            logits, tokens, valid=altered_tokens
+        )
         metrics = dict(
             eval_loss=loss,
             eval_accuracy=accuracy,
@@ -192,21 +216,18 @@ def main(argv):
         train_state_partition, train_state_shapes
     )
     checkpointer = StreamingCheckpointer(
-        FLAGS.checkpointer, logger.output_dir,
-        enable=jax.process_index() == 0
+        FLAGS.checkpointer, logger.output_dir, enable=jax.process_index() == 0
     )
 
     sharded_init_fn = pjit(
-        init_fn,
-        in_shardings=PS(),
-        out_shardings=train_state_partition
+        init_fn, in_shardings=PS(), out_shardings=train_state_partition
     )
 
     sharded_create_trainstate_from_params = pjit(
         create_trainstate_from_params,
-        in_shardings=(train_state_partition.params, ),
+        in_shardings=(train_state_partition.params,),
         out_shardings=train_state_partition,
-        donate_argnums=(0, ),
+        donate_argnums=(0,),
     )
 
     sharded_train_step = pjit(
@@ -242,9 +263,9 @@ def main(argv):
     mesh = RobertaConfig.get_jax_mesh(FLAGS.mesh_dim)
     with mesh:
         train_state, restored_params = None, None
-        if FLAGS.load_checkpoint != '':
-            load_type, load_path = FLAGS.load_checkpoint.split('::', 1)
-            if load_type == 'huggingface':
+        if FLAGS.load_checkpoint != "":
+            load_type, load_path = FLAGS.load_checkpoint.split("::", 1)
+            if load_type == "huggingface":
                 restored_params = tree_apply(
                     shard_fns.params, roberta_config.load_pretrained(load_path)
                 )
@@ -294,7 +315,10 @@ def main(argv):
                 logger.log(log_metrics)
                 tqdm.write("\n" + pprint.pformat(log_metrics) + "\n")
 
-            if FLAGS.save_milestone_freq > 0 and (step + 1) % FLAGS.save_milestone_freq == 0:
+            if (
+                FLAGS.save_milestone_freq > 0
+                and (step + 1) % FLAGS.save_milestone_freq == 0
+            ):
                 save_checkpoint(train_state, milestone=True)
             elif FLAGS.save_model_freq > 0 and (step + 1) % FLAGS.save_model_freq == 0:
                 save_checkpoint(train_state)

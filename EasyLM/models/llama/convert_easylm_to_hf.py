@@ -37,55 +37,55 @@ from EasyLM.jax_utils import float_tensor_to_dtype
 
 
 FLAGS, FLAGS_DEF = mlxu.define_flags_with_default(
-    load_checkpoint='',
-    tokenizer_path='',
-    model_size='13b',
-    output_dir='',
+    load_checkpoint="",
+    tokenizer_path="",
+    model_size="13b",
+    output_dir="",
 )
 
 
 LLAMA_STANDARD_CONFIGS = {
-    '1b': {
-        'dim': 2048,
-        'intermediate_size': 5504,
-        'n_layers': 22,
-        'n_heads': 16,
-        'norm_eps': 1e-6,
+    "1b": {
+        "dim": 2048,
+        "intermediate_size": 5504,
+        "n_layers": 22,
+        "n_heads": 16,
+        "norm_eps": 1e-6,
     },
-    '3b': {
-        'dim': 3200,
-        'intermediate_size': 8640,
-        'n_layers': 26,
-        'n_heads': 32,
-        'norm_eps': 1e-6,
+    "3b": {
+        "dim": 3200,
+        "intermediate_size": 8640,
+        "n_layers": 26,
+        "n_heads": 32,
+        "norm_eps": 1e-6,
     },
-    '7b': {
-        'dim': 4096,
-        'intermediate_size': 11008,
-        'n_layers': 32,
-        'n_heads': 32,
-        'norm_eps': 1e-6,
+    "7b": {
+        "dim": 4096,
+        "intermediate_size": 11008,
+        "n_layers": 32,
+        "n_heads": 32,
+        "norm_eps": 1e-6,
     },
-    '13b': {
-        'dim': 5120,
-        'intermediate_size': 13824,
-        'n_layers': 40,
-        'n_heads': 40,
-        'norm_eps': 1e-6,
+    "13b": {
+        "dim": 5120,
+        "intermediate_size": 13824,
+        "n_layers": 40,
+        "n_heads": 40,
+        "norm_eps": 1e-6,
     },
-    '30b': {
-        'dim': 6656,
-        'intermediate_size': 17920,
-        'n_layers': 60,
-        'n_heads': 52,
-        'norm_eps': 1e-6,
+    "30b": {
+        "dim": 6656,
+        "intermediate_size": 17920,
+        "n_layers": 60,
+        "n_heads": 52,
+        "norm_eps": 1e-6,
     },
-    '65b': {
-        'dim': 8192,
-        'intermediate_size': 22016,
-        'n_layers': 80,
-        'n_heads': 64,
-        'norm_eps': 1e-5,
+    "65b": {
+        "dim": 8192,
+        "intermediate_size": 22016,
+        "n_layers": 80,
+        "n_heads": 64,
+        "norm_eps": 1e-5,
     },
 }
 
@@ -102,13 +102,13 @@ def match_keywords(string, positives, negatives):
 
 def load_and_convert_checkpoint(path):
     _, flax_params = StreamingCheckpointer.load_trainstate_checkpoint(path)
-    flax_params = flatten_dict(flax_params['params'], sep='.')
+    flax_params = flatten_dict(flax_params["params"], sep=".")
     torch_params = {}
     for key, tensor in flax_params.items():
-        if match_keywords(key, ["kernel"], ["norm", 'ln_f']):
+        if match_keywords(key, ["kernel"], ["norm", "ln_f"]):
             tensor = tensor.T
         torch_params[key] = torch.tensor(
-            float_tensor_to_dtype(tensor, 'fp32'), dtype=torch.float16
+            float_tensor_to_dtype(tensor, "fp32"), dtype=torch.float16
         )
     return torch_params
 
@@ -135,12 +135,17 @@ def write_model(loaded, model_path, model_size):
     dim = params["dim"]
     dims_per_head = dim // n_heads
     base = 10000.0
-    inv_freq = 1.0 / (base ** (torch.arange(0, dims_per_head, 2).float() / dims_per_head))
+    inv_freq = 1.0 / (
+        base ** (torch.arange(0, dims_per_head, 2).float() / dims_per_head)
+    )
 
     # permute for sliced rotary
     def permute(w):
-        return w.view(n_heads, dim // n_heads // 2, 2, dim).transpose(1, 2).reshape(dim, dim)
-
+        return (
+            w.view(n_heads, dim // n_heads // 2, 2, dim)
+            .transpose(1, 2)
+            .reshape(dim, dim)
+        )
 
     param_count = 0
     index_dict = {"weight_map": {}}
@@ -153,16 +158,27 @@ def write_model(loaded, model_path, model_size):
             f"model.layers.{layer_i}.self_attn.k_proj.weight": permute(
                 loaded[f"transformer.h.{layer_i}.attention.wk.kernel"]
             ),
-            f"model.layers.{layer_i}.self_attn.v_proj.weight": loaded[f"transformer.h.{layer_i}.attention.wv.kernel"],
-            f"model.layers.{layer_i}.self_attn.o_proj.weight": loaded[f"transformer.h.{layer_i}.attention.wo.kernel"],
-
-            f"model.layers.{layer_i}.mlp.gate_proj.weight": loaded[f"transformer.h.{layer_i}.feed_forward.w1.kernel"],
-            f"model.layers.{layer_i}.mlp.down_proj.weight": loaded[f"transformer.h.{layer_i}.feed_forward.w2.kernel"],
-            f"model.layers.{layer_i}.mlp.up_proj.weight": loaded[f"transformer.h.{layer_i}.feed_forward.w3.kernel"],
-
-            f"model.layers.{layer_i}.input_layernorm.weight": loaded[f"transformer.h.{layer_i}.attention_norm.kernel"],
-            f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded[f"transformer.h.{layer_i}.ffn_norm.kernel"],
-
+            f"model.layers.{layer_i}.self_attn.v_proj.weight": loaded[
+                f"transformer.h.{layer_i}.attention.wv.kernel"
+            ],
+            f"model.layers.{layer_i}.self_attn.o_proj.weight": loaded[
+                f"transformer.h.{layer_i}.attention.wo.kernel"
+            ],
+            f"model.layers.{layer_i}.mlp.gate_proj.weight": loaded[
+                f"transformer.h.{layer_i}.feed_forward.w1.kernel"
+            ],
+            f"model.layers.{layer_i}.mlp.down_proj.weight": loaded[
+                f"transformer.h.{layer_i}.feed_forward.w2.kernel"
+            ],
+            f"model.layers.{layer_i}.mlp.up_proj.weight": loaded[
+                f"transformer.h.{layer_i}.feed_forward.w3.kernel"
+            ],
+            f"model.layers.{layer_i}.input_layernorm.weight": loaded[
+                f"transformer.h.{layer_i}.attention_norm.kernel"
+            ],
+            f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded[
+                f"transformer.h.{layer_i}.ffn_norm.kernel"
+            ],
         }
 
         state_dict[f"model.layers.{layer_i}.self_attn.rotary_emb.inv_freq"] = inv_freq
@@ -172,7 +188,7 @@ def write_model(loaded, model_path, model_size):
         torch.save(state_dict, os.path.join(tmp_model_path, filename))
 
     filename = f"pytorch_model-{n_layers + 1}-of-{n_layers + 1}.bin"
-        # Unsharded
+    # Unsharded
     state_dict = {
         "model.embed_tokens.weight": loaded["transformer.wte.embedding"],
         "model.norm.weight": loaded["transformer.ln_f.kernel"],
@@ -222,24 +238,24 @@ def write_tokenizer(tokenizer_path, input_tokenizer_path):
                 "lstrip": False,
                 "normalized": True,
                 "rstrip": False,
-                "single_word": False
+                "single_word": False,
             },
             "eos_token": {
                 "content": "</s>",
                 "lstrip": False,
                 "normalized": True,
                 "rstrip": False,
-                "single_word": False
+                "single_word": False,
             },
             "unk_token": {
                 "content": "<unk>",
                 "lstrip": False,
                 "normalized": True,
                 "rstrip": False,
-                "single_word": False
+                "single_word": False,
             },
         },
-        os.path.join(tokenizer_path, "special_tokens_map.json")
+        os.path.join(tokenizer_path, "special_tokens_map.json"),
     )
     write_json(
         {
@@ -256,7 +272,7 @@ def write_tokenizer(tokenizer_path, input_tokenizer_path):
                 "lstrip": False,
                 "normalized": True,
                 "rstrip": False,
-                "single_word": False
+                "single_word": False,
             },
             "eos_token": {
                 "__type": "AddedToken",
@@ -264,7 +280,7 @@ def write_tokenizer(tokenizer_path, input_tokenizer_path):
                 "lstrip": False,
                 "normalized": True,
                 "rstrip": False,
-                "single_word": False
+                "single_word": False,
             },
             "unk_token": {
                 "__type": "AddedToken",
@@ -272,16 +288,22 @@ def write_tokenizer(tokenizer_path, input_tokenizer_path):
                 "lstrip": False,
                 "normalized": True,
                 "rstrip": False,
-                "single_word": False
+                "single_word": False,
             },
         },
         os.path.join(tokenizer_path, "tokenizer_config.json"),
     )
-    shutil.copyfile(input_tokenizer_path, os.path.join(tokenizer_path, "tokenizer.model"))
+    shutil.copyfile(
+        input_tokenizer_path, os.path.join(tokenizer_path, "tokenizer.model")
+    )
 
 
 def main(argv):
-    assert FLAGS.load_checkpoint != "" and FLAGS.output_dir != "" and FLAGS.tokenizer_path != ""
+    assert (
+        FLAGS.load_checkpoint != ""
+        and FLAGS.output_dir != ""
+        and FLAGS.tokenizer_path != ""
+    )
     assert FLAGS.model_size in LLAMA_STANDARD_CONFIGS
     write_tokenizer(
         tokenizer_path=FLAGS.output_dir,

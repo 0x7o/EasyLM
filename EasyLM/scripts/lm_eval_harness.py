@@ -18,7 +18,7 @@ from EasyLM.serving import LMClient
 
 
 FLAGS, FLAGS_DEF = mlxu.define_flags_with_default(
-    tasks='wsc,piqa,winogrande,openbookqa,logiqa',
+    tasks="wsc,piqa,winogrande,openbookqa,logiqa",
     shots=0,
     limit=0,
     write_out=False,
@@ -28,7 +28,6 @@ FLAGS, FLAGS_DEF = mlxu.define_flags_with_default(
 
 
 class LMEvalHarnessInterface(LM):
-
     def __init__(self, lm_client):
         self.lm_client = lm_client
 
@@ -51,13 +50,16 @@ def main(argv):
         config=FLAGS.logger, variant=mlxu.get_user_flags(FLAGS, FLAGS_DEF)
     )
     model = LMEvalHarnessInterface(LMClient(FLAGS.lm_client))
-    task_list = FLAGS.tasks.split(',')
+    task_list = FLAGS.tasks.split(",")
     results = evaluator.evaluate(
-        model, tasks.get_task_dict(task_list), False, FLAGS.shots,
+        model,
+        tasks.get_task_dict(task_list),
+        False,
+        FLAGS.shots,
         limit=None if FLAGS.limit <= 0 else FLAGS.limit,
         write_out=FLAGS.write_out,
     )
-    logger.log(flatten_dict(results['results'], sep='/'))
+    logger.log(flatten_dict(results["results"], sep="/"))
     pprint.pprint(results)
 
 

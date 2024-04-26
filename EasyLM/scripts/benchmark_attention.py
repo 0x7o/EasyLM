@@ -7,14 +7,12 @@ import jax.flatten_util
 import jax.numpy as jnp
 import mlxu
 from EasyLM.bpt import blockwise_attn
-from EasyLM.jax_utils import (
-    get_float_dtype_by_name, set_random_seed, next_rng, JaxRNG
-)
+from EasyLM.jax_utils import get_float_dtype_by_name, set_random_seed, next_rng, JaxRNG
 
 
 FLAGS, _ = mlxu.define_flags_with_default(
     seed=42,
-    dtype='fp32',
+    dtype="fp32",
     embed_dim=2048,
     n_heads=16,
     ref_attn_seq_len=2048,
@@ -28,7 +26,6 @@ FLAGS, _ = mlxu.define_flags_with_default(
 
 
 def main(argv):
-
     def random_kqv(rng_key, seq_len):
         rng_generator = JaxRNG(rng_key)
         kqv = []
@@ -36,8 +33,13 @@ def main(argv):
             kqv.append(
                 jax.random.normal(
                     rng_generator(),
-                    (FLAGS.batch_size, seq_len, FLAGS.n_heads, FLAGS.embed_dim // FLAGS.n_heads),
-                    dtype=get_float_dtype_by_name(FLAGS.dtype)
+                    (
+                        FLAGS.batch_size,
+                        seq_len,
+                        FLAGS.n_heads,
+                        FLAGS.embed_dim // FLAGS.n_heads,
+                    ),
+                    dtype=get_float_dtype_by_name(FLAGS.dtype),
                 )
             )
         return tuple(kqv)
@@ -61,7 +63,9 @@ def main(argv):
     def efficient_attention(query, key, value):
         dtype = get_float_dtype_by_name(FLAGS.dtype)
         return blockwise_attn(
-            query, key, value,
+            query,
+            key,
+            value,
             bias=None,
             deterministic=True,
             dropout_rng=None,
@@ -76,7 +80,6 @@ def main(argv):
             prevent_cse=True,
         )
 
-
     @partial(jax.jit, static_argnums=(1,))
     def reference_attn_forward_backward(rng_key, seq_len):
         @partial(jax.grad, argnums=(0, 1, 2))
@@ -86,9 +89,7 @@ def main(argv):
             return jnp.mean(out)
 
         query, key, value = random_kqv(rng_key, seq_len)
-        return jax.flatten_util.ravel_pytree(
-            grad_fn(query, key, value)[1]
-        )[0].mean()
+        return jax.flatten_util.ravel_pytree(grad_fn(query, key, value)[1])[0].mean()
 
     @partial(jax.jit, static_argnums=(1,))
     def efficient_attn_forward_backward(rng_key, seq_len):
@@ -98,53 +99,57 @@ def main(argv):
             return jnp.mean(out)
 
         query, key, value = random_kqv(rng_key, seq_len)
-        return jax.flatten_util.ravel_pytree(
-            grad_fn(query, key, value)[1]
-        )[0].mean()
-
+        return jax.flatten_util.ravel_pytree(grad_fn(query, key, value)[1])[0].mean()
 
     set_random_seed(FLAGS.seed)
 
-    jax.block_until_ready(reference_attn_forward_backward(next_rng(), FLAGS.ref_attn_seq_len))
-    jax.block_until_ready(efficient_attn_forward_backward(next_rng(), FLAGS.eff_attn_seq_len))
+    jax.block_until_ready(
+        reference_attn_forward_backward(next_rng(), FLAGS.ref_attn_seq_len)
+    )
+    jax.block_until_ready(
+        efficient_attn_forward_backward(next_rng(), FLAGS.eff_attn_seq_len)
+    )
 
     all_results = []
     for i in range(FLAGS.warmup_steps):
-        all_results.append(reference_attn_forward_backward(next_rng(), FLAGS.ref_attn_seq_len))
+        all_results.append(
+            reference_attn_forward_backward(next_rng(), FLAGS.ref_attn_seq_len)
+        )
     jax.block_until_ready(all_results)
 
     start_time = time()
     all_results = []
     for i in range(FLAGS.steps):
-        all_results.append(reference_attn_forward_backward(next_rng(), FLAGS.ref_attn_seq_len))
+        all_results.append(
+            reference_attn_forward_backward(next_rng(), FLAGS.ref_attn_seq_len)
+        )
 
     jax.block_until_ready(all_results)
     elapsed_time_ref_attn = time() - start_time
-    print(f'Reference attention: {elapsed_time_ref_attn:.3f} seconds')
-
+    print(f"Reference attention: {elapsed_time_ref_attn:.3f} seconds")
 
     all_results = []
     for i in range(FLAGS.warmup_steps):
-        all_results.append(efficient_attn_forward_backward(next_rng(), FLAGS.eff_attn_seq_len))
+        all_results.append(
+            efficient_attn_forward_backward(next_rng(), FLAGS.eff_attn_seq_len)
+        )
     jax.block_until_ready(all_results)
-
 
     start_time = time()
     all_results = []
     for i in range(FLAGS.steps):
-        all_results.append(efficient_attn_forward_backward(next_rng(), FLAGS.eff_attn_seq_len))
+        all_results.append(
+            efficient_attn_forward_backward(next_rng(), FLAGS.eff_attn_seq_len)
+        )
 
     jax.block_until_ready(all_results)
     elapsed_time_efficient_attn = time() - start_time
-    print(f'Efficient attention: {elapsed_time_efficient_attn:.3f} seconds')
+    print(f"Efficient attention: {elapsed_time_efficient_attn:.3f} seconds")
 
     flops_ratio = (FLAGS.eff_attn_seq_len / FLAGS.ref_attn_seq_len) ** 2
     efficiency = elapsed_time_ref_attn / elapsed_time_efficient_attn * flops_ratio
-    print(f'Efficiency: {efficiency:.3f}')
+    print(f"Efficiency: {efficiency:.3f}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     mlxu.run(main)
-
-
-
