@@ -1,8 +1,6 @@
 import pprint
-from functools import partial
 
 from tqdm import tqdm, trange
-import numpy as np
 import mlxu
 
 import jax
@@ -30,7 +28,6 @@ from EasyLM.jax_utils import (
 )
 from EasyLM.models.llama.llama_model import LLaMAConfig, FlaxLLaMAForCausalLMModule
 
-
 FLAGS, FLAGS_DEF = mlxu.define_flags_with_default(
     seed=42,
     mesh_dim="1,-1,1",
@@ -39,6 +36,7 @@ FLAGS, FLAGS_DEF = mlxu.define_flags_with_default(
     load_llama_config="",
     update_llama_config="",
     load_checkpoint="",
+    epochs=None,
     load_dataset_state="",
     log_freq=50,
     save_model_freq=0,
@@ -236,18 +234,26 @@ def main(argv):
             del restored_params
 
         start_step = int(jax.device_get(train_state.step))
+        total_steps = FLAGS.total_steps
 
         if FLAGS.save_model_freq > 0:
             save_checkpoint(train_state)
 
+        if FLAGS.epochs:
+            total_steps = 999999999999999
+
         sharded_rng = next_rng()
 
-        step_counter = trange(start_step, FLAGS.total_steps, ncols=0)
+        step_counter = trange(start_step, total_steps, ncols=0)
 
-        for step, (batch, dataset_metrics) in zip(step_counter, dataset):
+        for step, (batch, dataset_metrics, epoch) in zip(step_counter, dataset):
             train_state, sharded_rng, metrics = sharded_train_step(
                 train_state, sharded_rng, batch
             )
+
+            if FLAGS.epochs and epoch >= FLAGS.epochs:
+                save_checkpoint(train_state, milestone=True)
+                break
 
             if step % FLAGS.log_freq == 0:
                 if FLAGS.eval_steps > 0:
@@ -263,13 +269,14 @@ def main(argv):
                 log_metrics = {"step": step}
                 log_metrics.update(metrics)
                 log_metrics.update(dataset_metrics)
+                log_metrics.update({"epoch": epoch})
                 log_metrics = jax.device_get(log_metrics)
                 logger.log(log_metrics)
                 tqdm.write("\n" + pprint.pformat(log_metrics) + "\n")
 
             if (
-                FLAGS.save_milestone_freq > 0
-                and (step + 1) % FLAGS.save_milestone_freq == 0
+                    FLAGS.save_milestone_freq > 0
+                    and (step + 1) % FLAGS.save_milestone_freq == 0
             ):
                 save_checkpoint(train_state, milestone=True)
             elif FLAGS.save_model_freq > 0 and (step + 1) % FLAGS.save_model_freq == 0:

@@ -171,6 +171,7 @@ class HuggingfaceDataset(object):
     def __iter__(self):
         chunk_size = self.config.batch_size * self.config.seq_length
         total_tokens = 0
+        epochs = 0
         while True:
             token_buffer = []
             loss_mask_buffer = []
@@ -199,9 +200,10 @@ class HuggingfaceDataset(object):
                     }
                     if self.config.always_start_with_bos:
                         batch["input_tokens"][:, 0] = self.tokenizer.bos_token_id
-                    yield batch, metrics
+                    yield batch, metrics, epochs
                     token_buffer = token_buffer[chunk_size:]
                     loss_mask_buffer = loss_mask_buffer[chunk_size:]
+            epochs += 1
 
     def get_state_dict(self):
         return dict(config=self.config)
