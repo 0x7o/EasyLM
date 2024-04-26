@@ -36,7 +36,7 @@ FLAGS, FLAGS_DEF = mlxu.define_flags_with_default(
     load_llama_config="",
     update_llama_config="",
     load_checkpoint="",
-    epochs=None,
+    epochs=-1,
     load_dataset_state="",
     log_freq=50,
     save_model_freq=0,
@@ -239,7 +239,7 @@ def main(argv):
         if FLAGS.save_model_freq > 0:
             save_checkpoint(train_state)
 
-        if FLAGS.epochs:
+        if FLAGS.epochs != -1:
             total_steps = 999999999999999
 
         sharded_rng = next_rng()
@@ -251,7 +251,7 @@ def main(argv):
                 train_state, sharded_rng, batch
             )
 
-            if FLAGS.epochs and epoch >= FLAGS.epochs:
+            if FLAGS.epochs != -1 and epoch >= FLAGS.epochs:
                 save_checkpoint(train_state, milestone=True)
                 break
 
