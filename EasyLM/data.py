@@ -347,47 +347,50 @@ class JsonDataset(object):
         token_buffer = []
         loss_mask_buffer = []
         last_time = 0.0
+        epochs = 0
         step_times = []
         start_time = time.time()
         start_tokens = self._total_tokens
-        for tokens, loss_masks, loc, index in self.parallel_example_iterator():
-            token_buffer.extend(tokens)
-            loss_mask_buffer.extend(loss_masks)
-            while len(token_buffer) > chunk_size + 1:
-                self._total_tokens += chunk_size
-                step_times.append(time.time() - last_time)
-                last_time = time.time()
-                if len(step_times) > self.config.throughput_average_window_size:
-                    step_times = step_times[
-                        -self.config.throughput_average_window_size :
-                    ]
-                average_throughput = chunk_size / np.mean(step_times)
-                accumulated_throughput = (self._total_tokens - start_tokens) / (
-                    time.time() - start_time
-                )
-                metrics = {
-                    "dataset_file_loc": loc,
-                    "dataset_example_index": index,
-                    "dataset_total_tokens": self._total_tokens,
-                    "dataset_accumulated_tps": accumulated_throughput,
-                    "dataset_average_tps": average_throughput,
-                }
-                batch = {
-                    "input_tokens": np.array(
-                        token_buffer[:chunk_size], dtype=np.int32
-                    ).reshape(self.config.batch_size, -1),
-                    "target_tokens": np.array(
-                        token_buffer[1 : chunk_size + 1], dtype=np.int32
-                    ).reshape(self.config.batch_size, -1),
-                    "loss_masks": np.array(
-                        loss_mask_buffer[1 : chunk_size + 1], dtype=np.float32
-                    ).reshape(self.config.batch_size, -1),
-                }
-                if self.config.always_start_with_bos:
-                    batch["input_tokens"][:, 0] = self.tokenizer.bos_token_id
-                yield batch, metrics
-                token_buffer = token_buffer[chunk_size:]
-                loss_mask_buffer = loss_mask_buffer[chunk_size:]
+        while True:
+            for tokens, loss_masks, loc, index in self.parallel_example_iterator():
+                token_buffer.extend(tokens)
+                loss_mask_buffer.extend(loss_masks)
+                while len(token_buffer) > chunk_size + 1:
+                    self._total_tokens += chunk_size
+                    step_times.append(time.time() - last_time)
+                    last_time = time.time()
+                    if len(step_times) > self.config.throughput_average_window_size:
+                        step_times = step_times[
+                            -self.config.throughput_average_window_size :
+                        ]
+                    average_throughput = chunk_size / np.mean(step_times)
+                    accumulated_throughput = (self._total_tokens - start_tokens) / (
+                        time.time() - start_time
+                    )
+                    metrics = {
+                        "dataset_file_loc": loc,
+                        "dataset_example_index": index,
+                        "dataset_total_tokens": self._total_tokens,
+                        "dataset_accumulated_tps": accumulated_throughput,
+                        "dataset_average_tps": average_throughput,
+                    }
+                    batch = {
+                        "input_tokens": np.array(
+                            token_buffer[:chunk_size], dtype=np.int32
+                        ).reshape(self.config.batch_size, -1),
+                        "target_tokens": np.array(
+                            token_buffer[1 : chunk_size + 1], dtype=np.int32
+                        ).reshape(self.config.batch_size, -1),
+                        "loss_masks": np.array(
+                            loss_mask_buffer[1 : chunk_size + 1], dtype=np.float32
+                        ).reshape(self.config.batch_size, -1),
+                    }
+                    if self.config.always_start_with_bos:
+                        batch["input_tokens"][:, 0] = self.tokenizer.bos_token_id
+                    yield batch, metrics, epochs
+                    token_buffer = token_buffer[chunk_size:]
+                    loss_mask_buffer = loss_mask_buffer[chunk_size:]
+            epochs += 1
 
     def get_state_dict(self):
         return dict(
