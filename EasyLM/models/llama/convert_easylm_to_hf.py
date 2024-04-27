@@ -229,10 +229,7 @@ def write_model(loaded, model_path, model_size):
 
 
 def main(argv):
-    assert (
-        FLAGS.load_checkpoint != ""
-        and FLAGS.output_dir != ""
-    )
+    assert FLAGS.load_checkpoint != "" and FLAGS.output_dir != ""
     assert FLAGS.model_size in LLAMA_STANDARD_CONFIGS
     write_model(
         load_and_convert_checkpoint(FLAGS.load_checkpoint),
