@@ -45,8 +45,19 @@ from EasyLM.jax_utils import (
     get_gradient_checkpoint_policy,
 )
 
-
 LLAMA_STANDARD_CONFIGS = {
+    "small": {
+        "vocab_size": 32000,
+        "hidden_size": 1024,
+        "intermediate_size": 2048,
+        "num_hidden_layers": 24,
+        "num_attention_heads": 20,
+        "max_sequence_length": 32768,
+        "initializer_range": 0.02,
+        "rms_norm_eps": 1e-6,
+        "use_cache": True,
+        "tie_word_embeddings": False,
+    },
     "1b": {
         "vocab_size": 32000,
         "hidden_size": 2048,
@@ -179,34 +190,34 @@ class LLaMAConfig(PretrainedConfig):
     model_type = "llama"
 
     def __init__(
-        self,
-        vocab_size=32000,
-        hidden_size=4096,
-        intermediate_size=11008,
-        num_hidden_layers=32,
-        num_attention_heads=32,
-        max_sequence_length=2048,
-        rms_norm_eps=1e-6,
-        initializer_range=0.02,
-        use_cache=True,
-        # pad_token_id=-1,
-        bos_token_id=0,
-        eos_token_id=1,
-        resid_pdrop=0.0,
-        embd_pdrop=0.0,
-        attn_pdrop=0.0,
-        tie_word_embeddings=False,
-        remat_block="",
-        remat_attention="",
-        remat_mlp="",
-        scan_attention=False,
-        scan_mlp=False,
-        scan_query_chunk_size=1024,
-        scan_key_chunk_size=1024,
-        scan_mlp_chunk_size=1024,
-        fcm_min_ratio=0.0,
-        fcm_max_ratio=0.0,
-        **kwargs,
+            self,
+            vocab_size=32000,
+            hidden_size=4096,
+            intermediate_size=11008,
+            num_hidden_layers=32,
+            num_attention_heads=32,
+            max_sequence_length=2048,
+            rms_norm_eps=1e-6,
+            initializer_range=0.02,
+            use_cache=True,
+            # pad_token_id=-1,
+            bos_token_id=0,
+            eos_token_id=1,
+            resid_pdrop=0.0,
+            embd_pdrop=0.0,
+            attn_pdrop=0.0,
+            tie_word_embeddings=False,
+            remat_block="",
+            remat_attention="",
+            remat_mlp="",
+            scan_attention=False,
+            scan_mlp=False,
+            scan_query_chunk_size=1024,
+            scan_key_chunk_size=1024,
+            scan_mlp_chunk_size=1024,
+            fcm_min_ratio=0.0,
+            fcm_max_ratio=0.0,
+            **kwargs,
     ):
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
@@ -354,7 +365,7 @@ class RMSNorm(nn.Module):
 
 
 def precompute_freqs_cis(
-    dim: int, end: int, theta: float = 10000.0, dtype: jnp.dtype = jnp.float32
+        dim: int, end: int, theta: float = 10000.0, dtype: jnp.dtype = jnp.float32
 ) -> jnp.ndarray:
     freqs = 1.0 / (theta ** (np.arange(0, dim, 2)[: (dim // 2)].astype(dtype) / dim))
     t = np.arange(end)  # type: ignore
@@ -365,10 +376,10 @@ def precompute_freqs_cis(
 
 
 def apply_rotary_emb(
-    xq: jnp.ndarray,
-    xk: jnp.ndarray,
-    freqs_cis: jnp.ndarray,
-    dtype: jnp.dtype = jnp.float32,
+        xq: jnp.ndarray,
+        xk: jnp.ndarray,
+        freqs_cis: jnp.ndarray,
+        dtype: jnp.dtype = jnp.float32,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     reshape_xq = xq.astype(jnp.float32).reshape(*xq.shape[:-1], -1, 2)
     reshape_xk = xk.astype(jnp.float32).reshape(*xk.shape[:-1], -1, 2)
@@ -496,14 +507,14 @@ class FlaxLLaMAAttention(nn.Module):
         return key, value, attention_mask
 
     def __call__(
-        self,
-        hidden_states,
-        attention_mask,
-        position_ids,
-        deterministic: bool = True,
-        init_cache: bool = False,
-        output_attentions: bool = False,
-        fcm_mask=None,
+            self,
+            hidden_states,
+            attention_mask,
+            position_ids,
+            deterministic: bool = True,
+            init_cache: bool = False,
+            output_attentions: bool = False,
+            fcm_mask=None,
     ):
         xq, xk, xv = (
             self.wq(hidden_states),
@@ -528,7 +539,7 @@ class FlaxLLaMAAttention(nn.Module):
             dropout_rng = self.make_rng("dropout")
 
         if self.config.scan_attention and not (
-            self.has_variable("cache", "cached_key") or init_cache
+                self.has_variable("cache", "cached_key") or init_cache
         ):
             # doesn't need blockwise attention if we are doing autoregressive decoding since no quadratic memory
 
@@ -717,14 +728,14 @@ class FlaxLLaMABlock(nn.Module):
         )
 
     def __call__(
-        self,
-        hidden_states,
-        attention_mask=None,
-        position_ids=None,
-        deterministic: bool = True,
-        init_cache: bool = False,
-        output_attentions: bool = False,
-        fcm_mask: Optional[jnp.ndarray] = None,
+            self,
+            hidden_states,
+            attention_mask=None,
+            position_ids=None,
+            deterministic: bool = True,
+            init_cache: bool = False,
+            output_attentions: bool = False,
+            fcm_mask: Optional[jnp.ndarray] = None,
     ):
         attn_outputs = self.attention(
             self.attention_norm(hidden_states),
@@ -772,13 +783,13 @@ class FlaxLLaMAPreTrainedModel(FlaxPreTrainedModel):
     module_class: nn.Module = None
 
     def __init__(
-        self,
-        config: LLaMAConfig,
-        input_shape: Tuple = (1, 1),
-        seed: int = 0,
-        dtype: jnp.dtype = jnp.float32,
-        _do_init: bool = True,
-        **kwargs,
+            self,
+            config: LLaMAConfig,
+            input_shape: Tuple = (1, 1),
+            seed: int = 0,
+            dtype: jnp.dtype = jnp.float32,
+            _do_init: bool = True,
+            **kwargs,
     ):
         module = self.module_class(config=config, dtype=dtype, **kwargs)
         super().__init__(
@@ -791,7 +802,7 @@ class FlaxLLaMAPreTrainedModel(FlaxPreTrainedModel):
         )
 
     def init_weights(
-        self, rng: jax.random.PRNGKey, input_shape: Tuple, params: FrozenDict = None
+            self, rng: jax.random.PRNGKey, input_shape: Tuple, params: FrozenDict = None
     ) -> FrozenDict:
         # init input tensors
         input_ids = jnp.zeros(input_shape, dtype="i4")
@@ -859,17 +870,17 @@ class FlaxLLaMAPreTrainedModel(FlaxPreTrainedModel):
 
     @add_start_docstrings_to_model_forward("")
     def __call__(
-        self,
-        input_ids,
-        attention_mask=None,
-        position_ids=None,
-        params: dict = None,
-        past_key_values: dict = None,
-        dropout_rng: jax.random.PRNGKey = None,
-        train: bool = False,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
+            self,
+            input_ids,
+            attention_mask=None,
+            position_ids=None,
+            params: dict = None,
+            past_key_values: dict = None,
+            dropout_rng: jax.random.PRNGKey = None,
+            train: bool = False,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
     ):
         output_attentions = (
             output_attentions
@@ -966,15 +977,15 @@ class FlaxLLaMABlockCollection(nn.Module):
         ]
 
     def __call__(
-        self,
-        hidden_states,
-        attention_mask=None,
-        position_ids=None,
-        deterministic: bool = True,
-        init_cache: bool = False,
-        output_attentions: bool = False,
-        output_hidden_states: bool = False,
-        return_dict: bool = True,
+            self,
+            hidden_states,
+            attention_mask=None,
+            position_ids=None,
+            deterministic: bool = True,
+            init_cache: bool = False,
+            output_attentions: bool = False,
+            output_hidden_states: bool = False,
+            return_dict: bool = True,
     ):
         all_attentions = () if output_attentions else None
         all_hidden_states = () if output_hidden_states else None
@@ -989,10 +1000,10 @@ class FlaxLLaMABlockCollection(nn.Module):
                 maxval=self.config.fcm_max_ratio,
             )
             fcm_mask = (
-                jax.random.uniform(
-                    self.make_rng("fcm"), shape=(batch_size, 1, 1, seq_length)
-                )
-                > fcm_ratio
+                    jax.random.uniform(
+                        self.make_rng("fcm"), shape=(batch_size, 1, 1, seq_length)
+                    )
+                    > fcm_ratio
             )
             fcm_mask = fcm_mask.at[:, :, :, 0].set(True)
             fcm_mask = fcm_mask.astype("bool")
@@ -1056,15 +1067,15 @@ class FlaxLLaMAModule(nn.Module):
         )
 
     def __call__(
-        self,
-        input_ids,
-        attention_mask,
-        position_ids,
-        deterministic=True,
-        init_cache: bool = False,
-        output_attentions: bool = False,
-        output_hidden_states: bool = False,
-        return_dict: bool = True,
+            self,
+            input_ids,
+            attention_mask,
+            position_ids,
+            deterministic=True,
+            init_cache: bool = False,
+            output_attentions: bool = False,
+            output_hidden_states: bool = False,
+            return_dict: bool = True,
     ):
         input_embeds = self.wte(input_ids.astype("i4"))
 
@@ -1134,15 +1145,15 @@ class FlaxLLaMAForCausalLMModule(nn.Module):
         )
 
     def __call__(
-        self,
-        input_ids,
-        attention_mask=None,
-        position_ids=None,
-        deterministic: bool = True,
-        init_cache: bool = False,
-        output_attentions: bool = False,
-        output_hidden_states: bool = False,
-        return_dict: bool = True,
+            self,
+            input_ids,
+            attention_mask=None,
+            position_ids=None,
+            deterministic: bool = True,
+            init_cache: bool = False,
+            output_attentions: bool = False,
+            output_hidden_states: bool = False,
+            return_dict: bool = True,
     ):
         batch_size, seq_length = input_ids.shape
         if attention_mask is None:
@@ -1188,7 +1199,7 @@ class FlaxLLaMAForCausalLM(FlaxLLaMAPreTrainedModel):
     module_class = FlaxLLaMAForCausalLMModule
 
     def prepare_inputs_for_generation(
-        self, input_ids, max_length, attention_mask: Optional[jax.Array] = None
+            self, input_ids, max_length, attention_mask: Optional[jax.Array] = None
     ):
         # initializing the cache
         batch_size, seq_length = input_ids.shape
@@ -1218,7 +1229,6 @@ class FlaxLLaMAForCausalLM(FlaxLLaMAPreTrainedModel):
         model_kwargs["past_key_values"] = model_outputs.past_key_values
         model_kwargs["position_ids"] = model_kwargs["position_ids"][:, -1:] + 1
         return model_kwargs
-
 
 # append_call_sample_docstring(
 #     FlaxGPTJForCausalLM,
