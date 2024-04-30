@@ -299,7 +299,7 @@ class JsonDataset(object):
                         if not line:  # Reached EOF
                             self._index = 0
                             fin.seek(0)
-                            continue
+                            break
                         data = self.parse_json(line)
                         if data is not None:
                             # JSON parsing succeeded
