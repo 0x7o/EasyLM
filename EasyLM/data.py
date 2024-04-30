@@ -298,7 +298,8 @@ class JsonDataset(object):
                         self._file_loc = fin.tell()
                         if not line:  # Reached EOF
                             self._index = 0
-                            break
+                            fin.seek(0)
+                            continue
                         data = self.parse_json(line)
                         if data is not None:
                             # JSON parsing succeeded
