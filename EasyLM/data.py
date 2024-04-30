@@ -288,25 +288,19 @@ class JsonDataset(object):
         return data
 
     def json_iterator(self):
-        while True:
-            for file in self.config.path.split(";"):
-                print(f"Reading file: {file}")
-                with mlxu.open_file(file, "r") as fin:
-                    fin.seek(self._file_loc)
-                    while True:
-                        line = fin.readline()
-                        self._file_loc = fin.tell()
-                        if not line:  # Reached EOF
-                            self._index = 0
-                            fin.seek(0)
-                            break
-                        data = self.parse_json(line)
-                        if data is not None:
-                            # JSON parsing succeeded
-                            yield data, self._file_loc, self._index
-                        self._index += 1
-            # Reached EOF for all files
-            self._index = 0
+        for file in self.config.path.split(";"):
+            print(f"Reading file: {file}")
+            with mlxu.open_file(file, "r") as fin:
+                while True:
+                    line = fin.readline()
+                    if not line:  # Reached EOF
+                        break  # Move to the next file
+                    data = self.parse_json(line)
+                    if data is not None:
+                        # JSON parsing succeeded
+                        yield data, fin.tell(), self._index
+                    self._index += 1
+        self._index = 0
 
     def batched(self, iterator, batch_size):
         batch = []
