@@ -59,7 +59,7 @@ LLAMA_STANDARD_CONFIGS = {
         "tie_word_embeddings": False,
     },
     "1b": {
-        "vocab_size": 32000,
+        "vocab_size": 128000,
         "hidden_size": 2048,
         "intermediate_size": 5504,
         "num_hidden_layers": 22,

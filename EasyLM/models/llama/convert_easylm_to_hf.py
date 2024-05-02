@@ -224,6 +224,7 @@ def write_model(loaded, model_path, model_size):
     del model.config._name_or_path
 
     print("Saving in the Transformers format.")
+    model.push_to_hub("aeonium/Aeonium-v0-Base-1B-Web")
     model.save_pretrained(model_path)
     shutil.rmtree(tmp_model_path)
 
