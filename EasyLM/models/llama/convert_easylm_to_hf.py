@@ -210,7 +210,8 @@ def write_model(loaded, model_path, model_size):
         num_attention_heads=params["n_heads"],
         num_hidden_layers=params["n_layers"],
         rms_norm_eps=params["norm_eps"],
-        vocab_size=128000
+        vocab_size=128000,
+        max_position_embeddings=4096
     )
     config.save_pretrained(tmp_model_path)
 
@@ -225,7 +226,7 @@ def write_model(loaded, model_path, model_size):
     del model.config._name_or_path
 
     print("Saving in the Transformers format.")
-    model.push_to_hub("aeonium/Aeonium-v1-Base-1.6B-checkpoint-20B")
+    model.push_to_hub("aeonium/temp")
     model.save_pretrained(model_path)
     shutil.rmtree(tmp_model_path)
 
