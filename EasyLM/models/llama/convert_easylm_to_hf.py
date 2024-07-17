@@ -210,7 +210,7 @@ def write_model(loaded, model_path, model_size):
         num_attention_heads=params["n_heads"],
         num_hidden_layers=params["n_layers"],
         rms_norm_eps=params["norm_eps"],
-        vocab_size=128000,
+        vocab_size=64000,
         max_position_embeddings=4096
     )
     config.save_pretrained(tmp_model_path)
