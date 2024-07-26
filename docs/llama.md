@@ -127,8 +127,7 @@ Pytorch LLaMA checkpoint. To do so, use the following command:
 
 ``` shell
 python -m EasyLM.models.llama.convert_easylm_to_hf \
-    --load_checkpoint='params::path/to/easylm/checkpoint' \
-    --tokenizer_path='path/to/llama/tokenizer' \
-    --model_size='13b' \  # '7b', '13b', '30b' or '65b'
-    --output_dir='path/to/output/huggingface/llama/checkpoint'
+    --load_checkpoint='params::gs://aeonium-checkpoints/logs/5e74cb861cfa41e18020453894cafb97/streaming_params_25000' \
+    --model_size='1b' \
+    --output_dir='checkpoint'
 ```

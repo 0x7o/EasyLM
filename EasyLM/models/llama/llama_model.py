@@ -88,7 +88,7 @@ LLAMA_STANDARD_CONFIGS = {
         "intermediate_size": 14336,
         "num_hidden_layers": 32,
         "num_attention_heads": 32,
-        "max_sequence_length": 2048,
+        "max_sequence_length": 131072,
         "initializer_range": 0.02,
         "rms_norm_eps": 1e-5,
         "use_cache": True,
